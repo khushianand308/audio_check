@@ -7,9 +7,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const reasonsList = document.getElementById('reasons-list');
     const resultCard = document.getElementById('result-card');
     const auditDetails = document.getElementById('audit-details');
-    const cleanedPlayer = document.getElementById('cleaned-player');
+    const historyCard = document.getElementById('history-card');
+    const historyBody = document.getElementById('history-body');
+    const clearHistoryBtn = document.getElementById('clear-history-btn');
 
     let currentFileData = null;
+    let historyLog = [];
 
     // File Selection
     dropZone.addEventListener('click', () => fileInput.click());
@@ -43,6 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
             currentFileData = data;
 
             displayResults(data);
+            addToHistory(file.name, data);
         } catch (error) {
             console.error(error);
         } finally {
@@ -50,6 +54,44 @@ document.addEventListener('DOMContentLoaded', () => {
             processBtn.textContent = 'Run Acoustic Audit';
         }
     });
+
+    // Clear history
+    clearHistoryBtn.addEventListener('click', () => {
+        historyLog = [];
+        historyBody.innerHTML = '';
+        historyCard.style.display = 'none';
+    });
+
+    function addToHistory(filename, data) {
+        const metrics = (data.audio_audit && data.audio_audit.metrics) || {};
+        const mos_scores = metrics.mos || {};
+        const rowNum = historyLog.length + 1;
+
+        historyLog.push({ filename, data });
+
+        const status = data.is_reliable ? 'CLEAN' : 'BAD';
+        const score = data.reliability_score !== undefined ? `${data.reliability_score.toFixed(1)}%` : '--';
+        const snrVal = metrics.snr !== undefined ? metrics.snr.toFixed(1) : '--';
+        const mosVal = mos_scores.ovrl_mos ? mos_scores.ovrl_mos.toFixed(1) : '--';
+        const cleaned = data.cleaned_file_url ? '✅ Yes' : '—';
+        const statusColor = data.is_reliable ? 'var(--accent-green)' : 'var(--accent-red)';
+        const scoreColor = data.reliability_score >= 80 ? 'var(--accent-green)' : data.reliability_score >= 50 ? 'var(--gold-primary)' : 'var(--accent-red)';
+
+        const tr = document.createElement('tr');
+        tr.style.borderBottom = '1px solid rgba(255,255,255,0.06)';
+        tr.innerHTML = `
+            <td style="padding: 10px 12px; color: var(--text-dim);">${rowNum}</td>
+            <td style="padding: 10px 12px; font-size: 0.8rem; color: #fff; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${filename}">${filename}</td>
+            <td style="padding: 10px 12px; font-weight: 800; color: ${statusColor};">${status}</td>
+            <td style="padding: 10px 12px; font-weight: 800; color: ${scoreColor};">${score}</td>
+            <td style="padding: 10px 12px; color: #ccc;">${snrVal}</td>
+            <td style="padding: 10px 12px; color: #ccc;">${mosVal}</td>
+            <td style="padding: 10px 12px; color: var(--accent-green);">${cleaned}</td>
+        `;
+
+        historyBody.appendChild(tr);
+        historyCard.style.display = 'block';
+    }
 
     function displayResults(data) {
         auditDetails.style.display = 'block';
@@ -85,7 +127,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // 4. Final Reliability Score
         if (data.reliability_score !== undefined) {
             document.getElementById('reliability-container').style.display = 'block';
-            document.getElementById('stat-reliability').textContent = `${data.reliability_score}%`;
+            document.getElementById('stat-reliability').textContent = `${data.reliability_score.toFixed(1)}%`;
 
             // Color code the score
             const relEl = document.getElementById('stat-reliability');
@@ -98,7 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const summaryContainer = document.getElementById('acoustic-summary-container');
         const summaryText = document.getElementById('acoustic-summary-text');
 
-        const metrics = data.audio_audit.metrics || {};
+        const metrics = (data.audio_audit && data.audio_audit.metrics) || {};
         const mos_scores = metrics.mos || {};
 
         if (summaryContainer && summaryText && data.audio_audit) {
@@ -122,7 +164,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.is_reliable) {
                 summarySteps.push(`Based on this acoustic analysis, the audio file is robust enough to be sent directly to the Deepgram Transcription engine without major errors.`);
             } else {
-                summarySteps.push(`Because this audio file is highly degraded, it will likely produce semantic hallucinations if transcribed. It must be cleaned through the DeepFilterNet suppression pipeline first.`);
+                if (data.cleaned_file_url) {
+                    summarySteps.push(`Because this audio was degraded, it has been automatically cleaned by DeepFilterNet. The cleaned version is now available for playback below.`);
+                } else {
+                    summarySteps.push(`Because this audio file is highly degraded, it will likely produce semantic hallucinations if transcribed.`);
+                }
             }
 
             summaryText.innerHTML = summarySteps.join(' ');
@@ -149,17 +195,22 @@ document.addEventListener('DOMContentLoaded', () => {
             audioStatusEl.innerHTML = '<span style="color: var(--accent-green);">CLEAN</span>';
         }
 
+        // 5. Stats & Playback - Always show original, conditionally show cleaned
+        const rawPlayer = document.getElementById('raw-player');
+        const cleanedPlayer = document.getElementById('cleaned-player');
+        const cleanedContainer = document.getElementById('cleaned-audio-container');
+
+        // Always populate the original raw audio
+        if (data.raw_file_url) {
+            rawPlayer.src = data.raw_file_url;
+        }
+
+        // Show cleaned comparison panel only if DeepFilterNet produced a result
         if (data.cleaned_file_url) {
-            document.getElementById('audio-preview-label').textContent = "CLEANED AUDIO PREVIEW (AI ENHANCED)";
             cleanedPlayer.src = data.cleaned_file_url;
-            cleanedPlayer.style.display = 'block';
+            cleanedContainer.style.display = 'block';
         } else {
-            document.getElementById('audio-preview-label').textContent = "RAW AUDIO PREVIEW (CLEAN SIGNAL)";
-            // Use the raw file URL served directly from the backend
-            if (data.raw_file_url) {
-                cleanedPlayer.src = data.raw_file_url;
-                cleanedPlayer.style.display = 'block';
-            }
+            cleanedContainer.style.display = 'none';
         }
     }
 });

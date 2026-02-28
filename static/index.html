@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AudioSense Pro | Neural Call Audit</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">Audio<span>Sense</span> <small
+                    style="font-size: 0.6rem; vertical-align: middle; background: var(--gold-primary); color: #000; padding: 2px 4px; border-radius: 4px; margin-left: 5px;">PRO</small>
+            </div>
+            <div id="connection-status" class="badge">Production Audit Active</div>
+        </header>
+
+        <div class="grid" style="grid-template-columns: 1fr; align-items: stretch; max-width: 800px; margin: 0 auto;">
+            <!-- Main Audit Panel -->
+            <section class="card animate">
+                <h2 style="margin-bottom: 1rem; color: var(--gold-primary);">Acoustic Payload Verification</h2>
+                <div class="upload-zone" id="drop-zone">
+                    <p>Drag & Drop call recording to start AI Audit</p>
+                    <input type="file" id="file-input" hidden accept="audio/*">
+                    <p id="file-name" style="margin-top: 1rem; color: var(--gold-primary); font-weight: 600;"></p>
+                </div>
+        </div>
+        <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
+            <button class="btn btn-primary" id="process-btn" disabled style="min-width: 150px;">Run Acoustic
+                Audit</button>
+        </div>
+        </section>
+    </div>
+
+    <!-- Result/Flags Section (The Heart of Audit) -->
+    <section class="card animate"
+        style="margin-top: 1.5rem; animation-delay: 0.4s; border-left: 5px solid var(--border);" id="result-card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <h3 style="color: var(--gold-primary); text-transform: uppercase; letter-spacing: 1px; margin: 0;">Audit
+                    Flags & Alerts</h3>
+                <div id="verdict-badge" class="badge" style="display: none;">AWAITING AUDIT</div>
+            </div>
+            <div id="reliability-container" style="display: none; text-align: right;">
+                <span class="text-dim"
+                    style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px;">TRANSCRIPT
+                    READINESS SCORE</span>
+                <div id="stat-reliability"
+                    style="font-size: 2rem; font-weight: 800; color: var(--gold-primary); line-height: 1;">--</div>
+            </div>
+        </div>
+
+        <div id="reasons-list" style="margin-top: 1rem; min-height: 50px;">
+            <p class="text-dim">Ready for production audit.</p>
+        </div>
+
+        <div id="acoustic-summary-container"
+            style="display: none; margin-top: 1.5rem; padding: 15px; border-left: 3px solid var(--gold-primary); background: rgba(0,0,0,0.2);">
+            <p class="text-dim" style="font-size: 0.75rem; text-transform: uppercase;">ACOUSTIC ANALYSIS SUMMARY</p>
+            <p id="acoustic-summary-text" style="color: #fff; margin-top: 8px; line-height: 1.5; font-size: 0.95rem;">
+            </p>
+        </div>
+
+        <!-- Enhanced Flag Visualization -->
+        <div id="audit-details"
+            style="display: none; margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border);">
+
+            <!-- Audio Comparison Panel -->
+            <div style="display: flex; gap: 1.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+                <!-- Original Audio -->
+                <div style="flex: 1; min-width: 200px;">
+                    <span class="text-dim"
+                        style="font-size: 0.65rem; display: block; margin-bottom: 0.4rem; text-transform: uppercase;">
+                        🎙️ Original Audio
+                    </span>
+                    <audio id="raw-player" controls style="width: 100%; height: 35px;"></audio>
+                </div>
+                <!-- Cleaned Audio (only shown if noisy) -->
+                <div id="cleaned-audio-container" style="flex: 1; min-width: 200px; display: none;">
+                    <span class="text-dim"
+                        style="font-size: 0.65rem; display: block; margin-bottom: 0.4rem; text-transform: uppercase; color: var(--accent-green);">
+                        ✨ Cleaned Audio (AI Enhanced)
+                    </span>
+                    <audio id="cleaned-player" controls style="width: 100%; height: 35px;"></audio>
+                </div>
+            </div>
+
+            <!-- Stats Row -->
+            <div id="stats-summary" style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
+                <div style="text-align: center;">
+                    <span class="text-dim" style="font-size: 0.65rem;">AUDIO STATUS</span>
+                    <div id="stat-audio-status"
+                        style="font-size: 1.2rem; font-weight: 800; color: var(--gold-primary);">--
+                    </div>
+                </div>
+                <div style="text-align: center;">
+                    <span class="text-dim" style="font-size: 0.65rem;"
+                        title="Volume intensity of the voice compared to background acoustic hum.">SNR (dB)</span>
+                    <div id="stat-snr" style="font-size: 1.2rem; font-weight: 800; color: var(--gold-primary);">--
+                    </div>
+                </div>
+                <div style="text-align: center;">
+                    <span class="text-dim" style="font-size: 0.65rem;"
+                        title="Voice Activity Detection ratio. How dense the overlapping chatter is.">SPEECH
+                        RATIO</span>
+                    <div id="stat-speech" style="font-size: 1.2rem; font-weight: 800; color: var(--gold-primary);">
+                        --
+                    </div>
+                </div>
+                <div style="text-align: center;">
+                    <span class="text-dim" style="font-size: 0.65rem;"
+                        title="Empty air ratio. How much of the file has zero data.">SILENCE RATIO</span>
+                    <div id="stat-silence" style="font-size: 1.2rem; font-weight: 800; color: var(--gold-primary);">
+                        --
+                    </div>
+                </div>
+                <div style="text-align: center;">
+                    <span class="text-dim" style="font-size: 0.65rem;"
+                        title="Hardware distortion. Hit standard 1.0/-1.0 volume limit.">CLIPPING RATIO</span>
+                    <div id="stat-clipping" style="font-size: 1.2rem; font-weight: 800; color: var(--gold-primary);">
+                        --</div>
+                </div>
+                <div style="text-align: center;">
+                    <span class="text-dim" style="font-size: 0.65rem;"
+                        title="Deep Noise Suppression Model (Microsoft AI grading 1 to 5).">AI QA (MOS)</span>
+                    <div id="stat-mos" style="font-size: 1.2rem; font-weight: 800; color: var(--gold-primary);">
+                        --</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- History Dashboard -->
+    <section class="card animate" id="history-card" style="margin-top: 1.5rem; animation-delay: 0.6s; display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h3 style="color: var(--gold-primary); text-transform: uppercase; letter-spacing: 1px; margin: 0;">
+                Session Audit History
+            </h3>
+            <button id="clear-history-btn" class="btn"
+                style="font-size: 0.7rem; padding: 6px 12px; border: 1px solid var(--border); background: transparent; color: var(--text-dim); cursor: pointer; border-radius: 4px;">
+                Clear History
+            </button>
+        </div>
+        <div style="overflow-x: auto;">
+            <table id="history-table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                <thead>
+                    <tr
+                        style="border-bottom: 1px solid var(--border); text-align: left; color: var(--text-dim); font-size: 0.7rem; text-transform: uppercase;">
+                        <th style="padding: 8px 12px;">#</th>
+                        <th style="padding: 8px 12px;">Filename</th>
+                        <th style="padding: 8px 12px;">Status</th>
+                        <th style="padding: 8px 12px;">Readiness</th>
+                        <th style="padding: 8px 12px;">SNR (dB)</th>
+                        <th style="padding: 8px 12px;">MOS</th>
+                        <th style="padding: 8px 12px;">Cleaned?</th>
+                    </tr>
+                </thead>
+                <tbody id="history-body">
+                </tbody>
+            </table>
+        </div>
+    </section>
+    </div>
+
+    <script src="/static/js/main.js?v=4"></script>
+</body>
+
+</html>

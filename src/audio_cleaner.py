@@ -8,10 +8,9 @@ class AudioCleaner:
     Suppresses background noise (hiss, chatter, hum) while preserving speech.
     """
     def __init__(self, model_type="none"):
-        # init_df will download/load the best available model
-        # Using cpu to avoid GPU memory overhead in some environments, 
-        # but DeepFilterNet is very fast on CPU.
+        # Allow DeepFilterNet to use GPU (CUDA) for faster noise suppression
         self.model, self.df_state, _ = init_df()
+
 
     def clean_audio(self, input_path, output_path=None):
         """

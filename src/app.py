@@ -43,18 +43,24 @@ async def process_audio(
         audio_res = audio_analyzer.analyze(raw_path)
         is_noisy = audio_res.get("is_noisy", False)
         
-        # 2. Production Cleanup (Conditional)
+        # 2. Production Cleanup (Conditional) - Auto-clean noisy audio with DeepFilterNet
         target_path_for_asr = raw_path
         cleaned_file_url = None
         
-        # [STEP 1 FOCUS] Bypassing Heavy Models: DeepFilterNet temporarily disabled for instant audio scoring tests
-        # if is_noisy:
-        #     print(f"Audio flagged as NOISY. Applying DeepFilterNet to: {file.filename}...")
-        #     cleaner.clean_audio(raw_path, clean_path)
-        #     target_path_for_asr = clean_path
-        #     cleaned_file_url = f"/data/processed/clean_{file.filename}"
-        # else:
-        #     print(f"Audio is CLEAN. Bypassing DeepFilterNet for: {file.filename}...")
+        if is_noisy:
+            print(f"Audio flagged as NOISY. Applying DeepFilterNet to: {file.filename}...")
+            try:
+                cleaner.clean_audio(raw_path, clean_path)
+                if os.path.exists(clean_path):
+                    target_path_for_asr = clean_path
+                    cleaned_file_url = f"/data/processed/{file_id}_clean{ext}"
+                    print(f"DeepFilterNet cleanup complete. Clean file saved to: {clean_path}")
+                else:
+                    print(f"DeepFilterNet ran but no output file found. Using raw audio.")
+            except Exception as clean_err:
+                print(f"DeepFilterNet failed: {clean_err}. Using raw audio.")
+        else:
+            print(f"Audio is CLEAN. Bypassing DeepFilterNet for: {file.filename}.")
         
         # 3. Transcription Audit (Deepgram Pro)
         generated_transcript = None
