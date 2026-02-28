@@ -147,7 +147,7 @@ class AudioNoiseAnalyzer:
         return np.std(rms), (np.max(rms) / (np.mean(rms) + 1e-6))
 
     def analyze(self, file_path):
-        """Performs a fast hybrid analysis of the audio file by sampling the middle 10 seconds."""
+        """Performs a fast hybrid analysis of the entire audio file."""
         y, sr = self.load_audio(file_path)
         if y is None or len(y) == 0:
             return {"error": "Empty or invalid audio file"}
@@ -263,16 +263,16 @@ class AudioNoiseAnalyzer:
 
         return {
             "status": "BAD" if is_noisy or not is_good_for_transcript else "CLEAN",
-            "is_noisy": is_noisy,
-            "transcript_readiness": transcript_readiness,
-            "is_good_for_transcript": is_good_for_transcript,
+            "is_noisy": bool(is_noisy),
+            "transcript_readiness": float(transcript_readiness),
+            "is_good_for_transcript": bool(is_good_for_transcript),
             "reasons": reasons,
             "metrics": {
-                "snr": snr,
-                "hf_ratio": self.get_hf_energy_ratio(y, sr),
-                "ns_ratio": ns_ratio,
-                "clipping": clipping_ratio,
-                "kurtosis": kurtosis,
+                "snr": float(snr),
+                "hf_ratio": float(self.get_hf_energy_ratio(y, sr)),
+                "ns_ratio": float(ns_ratio),
+                "clipping": float(clipping_ratio),
+                "kurtosis": float(kurtosis),
                 "mos": mos_scores
             }
         }

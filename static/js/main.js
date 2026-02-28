@@ -97,18 +97,22 @@ document.addEventListener('DOMContentLoaded', () => {
         // 4.5 Generative Acoustic Summary
         const summaryContainer = document.getElementById('acoustic-summary-container');
         const summaryText = document.getElementById('acoustic-summary-text');
+
+        const metrics = data.audio_audit.metrics || {};
+        const mos_scores = metrics.mos || {};
+
         if (summaryContainer && summaryText && data.audio_audit) {
             let summarySteps = [];
-            const snr = data.audio_audit.snr_db;
-            const silence = data.audio_audit.silence_ratio * 100;
-            const speech = data.audio_audit.non_silence_ratio * 100;
+            const snr = metrics.snr || 0;
+            const speech = (metrics.ns_ratio || 0) * 100;
+            const silence = 100 - speech;
 
             if (snr < 15) summarySteps.push(`Significant background noise detected (${snr.toFixed(1)} dB Signal-to-Noise Ratio).`);
             else if (snr < 30) summarySteps.push(`Moderate background noise present (${snr.toFixed(1)} dB Signal-to-Noise Ratio).`);
             else summarySteps.push(`Background Signal-to-Noise Ratio is at highly optimal levels (${snr.toFixed(1)} dB SNR).`);
 
-            if (data.audio_audit.ovrl_mos) {
-                summarySteps.push(`The Microsoft AI Neural Network (DNSMOS) grades the physical shape of the human voice at ${data.audio_audit.ovrl_mos.toFixed(1)} out of 5.0.`);
+            if (mos_scores.ovrl_mos) {
+                summarySteps.push(`The Microsoft AI Neural Network (DNSMOS) grades the physical shape of the human voice at ${mos_scores.ovrl_mos.toFixed(1)} out of 5.0.`);
             }
 
             if (silence > 50) summarySteps.push(`The audio file is dominated by dead air and silence (${silence.toFixed(1)}%).`);
@@ -125,13 +129,18 @@ document.addEventListener('DOMContentLoaded', () => {
             summaryContainer.style.display = 'block';
         }
 
-
         // 5. Stats & Playback (Audio Focus)
-        document.getElementById('stat-snr').textContent = data.audio_audit.snr_db ? `${data.audio_audit.snr_db.toFixed(1)}` : '--';
-        document.getElementById('stat-speech').textContent = data.audio_audit.non_silence_ratio ? `${(data.audio_audit.non_silence_ratio * 100).toFixed(1)}%` : '--';
-        document.getElementById('stat-silence').textContent = data.audio_audit.silence_ratio ? `${(data.audio_audit.silence_ratio * 100).toFixed(1)}%` : '--';
-        document.getElementById('stat-clipping').textContent = data.audio_audit.clipping_ratio !== undefined ? `${(data.audio_audit.clipping_ratio * 100).toFixed(1)}%` : '--';
-        document.getElementById('stat-mos').textContent = data.audio_audit.ovrl_mos ? `${data.audio_audit.ovrl_mos.toFixed(1)} / 5` : '--';
+        const snr = metrics.snr;
+        const speech = metrics.ns_ratio !== undefined ? metrics.ns_ratio * 100 : undefined;
+        const silence = speech !== undefined ? 100 - speech : undefined;
+        const clipping = metrics.clipping !== undefined ? metrics.clipping * 100 : undefined;
+        const ovrl_mos = mos_scores.ovrl_mos;
+
+        document.getElementById('stat-snr').textContent = snr !== undefined ? `${snr.toFixed(1)}` : '--';
+        document.getElementById('stat-speech').textContent = speech !== undefined ? `${speech.toFixed(1)}%` : '--';
+        document.getElementById('stat-silence').textContent = silence !== undefined ? `${silence.toFixed(1)}%` : '--';
+        document.getElementById('stat-clipping').textContent = clipping !== undefined ? `${clipping.toFixed(1)}%` : '--';
+        document.getElementById('stat-mos').textContent = ovrl_mos ? `${ovrl_mos.toFixed(1)} / 5` : '--';
 
         const audioStatusEl = document.getElementById('stat-audio-status');
         if (data.audio_audit && data.audio_audit.is_noisy) {
