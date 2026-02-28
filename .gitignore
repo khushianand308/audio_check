@@ -1,16 +1,8 @@
-.venv/
+uploads/
 __pycache__/
 *.pyc
-data/uploads/*
-data/processed/*
-uploads/*
-!data/uploads/.gitkeep
-!data/processed/.gitkeep
-!uploads/.gitkeep
-.cache/
 .DS_Store
 .env
-*.log
 node_modules/
 dist/
 build/
