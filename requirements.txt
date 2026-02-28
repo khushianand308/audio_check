@@ -1,0 +1,13 @@
+fastapi==0.133.0
+uvicorn==0.41.0
+python-dotenv==1.2.1
+numpy==1.26.4
+scipy==1.12.0
+soundfile==0.13.1
+speechmos==0.0.1.1
+fuzzywuzzy
+python-Levenshtein
+torch
+deepgram-sdk
+google-generativeai
+deepfilter-sdk
