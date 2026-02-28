@@ -155,15 +155,15 @@ class AudioNoiseAnalyzer:
         # Final Score = 0.4 * SNR_score + 0.3 * Speech_ratio + 0.2 * (1 - Silence_ratio) + 0.1 * (1 - Clipping_ratio)
         
         # Normalize SNR (Assume 20dB is max score of 1.0, 0dB is 0.0)
-        snr_normalized = min(max(snr / 20.0, 0.0), 1.0)
+        snr_normalized = min(max(snr / 30.0, 0.0), 1.0)
         
         # Calculate raw component scores
-        score_snr = 0.3 * snr_normalized
+        score_snr = 0.2 * snr_normalized
         
         # Penalize Speech Ratio if it's too high (indicates dense overlapping chatter/noise)
-        # Optimal telephonic speech ratio is ~30-40%. >50% means no one is breathing or background noise is triggering VAD.
-        optimal_speech_ratio = min(ns_ratio, 0.45)
-        speech_penalty = max(0.0, ns_ratio - 0.45) * 1.5
+        # Increased optimal threshold to 0.65 to avoid penalizing normal continuous speech
+        optimal_speech_ratio = min(ns_ratio, 0.65)
+        speech_penalty = max(0.0, ns_ratio - 0.65) * 2.0
         score_speech = 0.2 * optimal_speech_ratio
         
         score_silence = 0.1 * (1.0 - silence_ratio)
@@ -172,7 +172,7 @@ class AudioNoiseAnalyzer:
         # Incorporate AI DNS MOS Score (0.0 to 1.0 weight) if available
         # DNSMOS rates audio 1 to 5. We normalize that to 0 to 1.
         mos_val = mos_scores.get('ovrl_mos') or 3.0 # Default to moderate if offline
-        score_mos = 0.3 * ((mos_val - 1.0) / 4.0)
+        score_mos = 0.4 * ((mos_val - 1.0) / 4.0)
         
         # Final mathematical audio score 0.0 to 1.0
         final_audio_score = score_snr + score_speech + score_silence + score_clipping + score_mos
@@ -181,29 +181,43 @@ class AudioNoiseAnalyzer:
         final_audio_score -= speech_penalty
 
         # Apply Kurtosis Penalty (Detects overlapping noise/distorted shape)
-        # Normal speech has a kurtosis around 3 to 10. Too low/high means noise collision
-        if kurtosis > 15 or kurtosis < 1:
-            final_audio_score *= 0.85 # 15% penalty for abnormal spectral shape
+        if kurtosis > 20 or kurtosis < 0.5:
+            final_audio_score *= 0.80 
 
-        # Thresholds: < 0.6 -> Noisy, > 0.80 -> Clean (Made Stricter)
-        # Convert Final Audio Score into user-requested Transcript Readiness Score
+        # Thresholds: Convert Final Audio Score into Readiness Score
         transcript_readiness = round(final_audio_score * 100, 1)
-        is_good_for_transcript = final_audio_score >= 0.70 # Require 70% perfection due to DNSMOS
+        # Require 55% score for a PASS
+        is_good_for_transcript = final_audio_score >= 0.55 
         
-        # Hard fail if AI specifically detects corrupt signal or loud overlapping background noise
+        # Specific MOS Fail-safes
         sig_mos = mos_scores.get('sig_mos', 5.0)
         bak_mos = mos_scores.get('bak_mos', 5.0)
-        if sig_mos < 2.5 or bak_mos < 2.0:
+        ovrl_mos = mos_scores.get('ovrl_mos', 5.0)
+
+        # Trigger failures based on specific bad characteristics
+        if bak_mos < 3.0:
             is_good_for_transcript = False
-            # Punish the readiness score heavily to reflect the AI MOS fail
-            transcript_readiness = min(transcript_readiness, 45.0) 
+            reasons.append(f"Significant Interference (BAK MOS: {bak_mos:.2f})")
         
+        if sig_mos < 2.5:
+            is_good_for_transcript = False
+            reasons.append(f"Weak/Distorted Speech (SIG MOS: {sig_mos:.2f})")
+            
+        if ovrl_mos < 2.7:
+            is_good_for_transcript = False
+            reasons.append(f"Poor Overall Quality (OVRL MOS: {ovrl_mos:.2f})")
+
         if not is_good_for_transcript:
              is_noisy = True
-             if transcript_readiness < 50.0:
-                 reasons.append(f"CRITICAL: Audio deeply corrupted (Readiness: {transcript_readiness}%)")
-             else:
-                 reasons.append(f"Risky Audio Quality (Readiness: {transcript_readiness}%)")
+             if not reasons: # If no specific MOS reason, add general quality flag
+                 if transcript_readiness < 50.0:
+                     reasons.append(f"CRITICAL: Audio deeply corrupted (Readiness: {transcript_readiness}%)")
+                 else:
+                     reasons.append(f"Risky Audio Quality (Readiness: {transcript_readiness}%)")
+             
+             # Punish the readiness score if it's already a failed case
+             if transcript_readiness > 60:
+                 transcript_readiness = 59.9
 
         # Specific metric threshold warnings
         if clipping_ratio > 0.02:
