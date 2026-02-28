@@ -56,14 +56,16 @@ def main():
                 continue
             
             audio = res["audio"]
-            status_str = "CLEAN" if res['is_reliable'] else "BAD"
-            ovrl = audio.get('ovrl_mos') or 0.0
-            sig = audio.get('sig_mos') or 0.0
-            bak = audio.get('bak_mos') or 0.0
+            status_str = audio.get("status", "UNKNOWN")
+            
+            mos = audio.get("metrics", {}).get("mos", {})
+            ovrl = mos.get('ovrl_mos', 0.0)
+            sig = mos.get('sig_mos', 0.0)
+            bak = mos.get('bak_mos', 0.0)
             
             print(f"{res['filename'][:35]:<35} | {status_str:<10} | {ovrl:<6.2f} | {sig:<6.2f} | {bak:<6.2f}")
             
-            if not res['is_reliable'] and res['reasons']:
+            if status_str != "CLEAN" and res['reasons']:
                 for reason in res['reasons']:
                     print(f"  > {reason}")
             print("-" * 80)
