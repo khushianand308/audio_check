@@ -16,9 +16,12 @@ load_dotenv()
 
 app = FastAPI(title="AudioSense Pro API")
 
-# Setup directories
-UPLOAD_DIR = "data/uploads"
-PROCESSED_DIR = "data/processed"
+# Base dir = project root (one level up from src/)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Setup directories with absolute paths
+UPLOAD_DIR = os.path.join(BASE_DIR, "data", "uploads")
+PROCESSED_DIR = os.path.join(BASE_DIR, "data", "processed")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(PROCESSED_DIR, exist_ok=True)
 # Initialize analyzers (lazy load if possible or global)
