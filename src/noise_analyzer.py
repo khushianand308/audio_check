@@ -171,27 +171,25 @@ class AudioNoiseAnalyzer:
         rms_std, crest = self.get_rms_dynamics(y)
 
         # 1. Base Score calculation
-        # Final Score = 0.4 * SNR_score + 0.3 * Speech_ratio + 0.2 * (1 - Silence_ratio) + 0.1 * (1 - Clipping_ratio)
         
-        # Normalize SNR (Assume 20dB is max score of 1.0, 0dB is 0.0)
-        snr_normalized = min(max(snr / 30.0, 0.0), 1.0)
-        
-        # Calculate raw component scores
+        # Normalize SNR (Assume 15dB is a solid pass for 1.0 score)
+        snr_normalized = min(max(snr / 15.0, 0.0), 1.0)
         score_snr = 0.2 * snr_normalized
         
-        # Penalize Speech Ratio if it's too high (indicates dense overlapping chatter/noise)
-        # Increased optimal threshold to 0.65 to avoid penalizing normal continuous speech
-        optimal_speech_ratio = min(ns_ratio, 0.65)
-        speech_penalty = max(0.0, ns_ratio - 0.65) * 2.0
-        score_speech = 0.2 * optimal_speech_ratio
+        # Normalized Speech Ratio: In telco, anything above 35% is usually healthy
+        score_speech = 0.2 * min(ns_ratio / 0.35, 1.0)
+        speech_penalty = max(0.0, ns_ratio - 0.70) * 4.0 # Very strict penalty for > 70% density
         
-        score_silence = 0.1 * (1.0 - silence_ratio)
+        # Silence: Anything less than 65% silence is "perfect" for this component
+        score_silence = 0.1 * min(1.3 * (1.0 - silence_ratio), 1.0)
+        
         score_clipping = 0.1 * (1.0 - clipping_ratio)
         
-        # Incorporate AI DNS MOS Score (0.0 to 1.0 weight) if available
-        # DNSMOS rates audio 1 to 5. We normalize that to 0 to 1.
-        mos_val = mos_scores.get('ovrl_mos') or 3.0 # Default to moderate if offline
-        score_mos = 0.4 * ((mos_val - 1.0) / 4.0)
+        # Incorporate AI DNS MOS Score (40% Weight)
+        # Shifted Anchors: 2.7 is now "Perfect" (100%), 1.7 is "Fail" (0%)
+        mos_val = mos_scores.get('ovrl_mos') or 3.0
+        mos_normalized = min(max((mos_val - 1.7) / (2.7 - 1.7), 0.0), 1.0)
+        score_mos = 0.4 * mos_normalized
         
         # Final mathematical audio score 0.0 to 1.0
         final_audio_score = score_snr + score_speech + score_silence + score_clipping + score_mos
@@ -234,7 +232,7 @@ class AudioNoiseAnalyzer:
             is_good_for_transcript = False
             reasons.append(f"Weak/Distorted Speech (SIG MOS: {sig_mos:.2f})")
             
-        if ovrl_mos < 2.7 and not overlap_risk:
+        if ovrl_mos < 2.5 and not overlap_risk:
             is_good_for_transcript = False
             reasons.append(f"Poor Overall Quality (OVRL MOS: {ovrl_mos:.2f})")
 
