@@ -1,0 +1,35 @@
+# The 5 Math Checks (Acoustic Heuristics)
+Think of these as the objective rules of physics.
+
+### 1. SNR (Signal-to-Noise Ratio)
+*   **What it means:** How loud is the person speaking compared to the background noise?
+*   **Simple Example:** Imagine trying to talk to a friend at a loud party. Your friend's voice is the "Signal," and the party music is the "Noise." SNR just measures if the voice is loud and clear enough to be easily understood over the background.
+
+### 2. Speech Density (VAD)
+*   **What it means:** How much of the audio is actual talking versus dead silence?
+*   **Simple Example:** Think of a bad radio show that has 40 seconds of dead air for every 10 seconds of talking. This checks to ensure the file is an actual phone call and not mostly someone sitting on mute.
+
+### 3. Clipping Detection
+*   **What it means:** Is the microphone "blown out" and distorted?
+*   **Simple Example:** Have you ever yelled too closely into a cheap microphone, and the recording sounded incredibly fuzzy, harsh, and loud? That happens when the sound is literally too big for the microphone to handle. This checks for that specific fuzzy distortion.
+
+### 4 & 5. Spectral Flux & Kurtosis (Overlap Detection)
+*   **What it means:** Are two people constantly talking over each other?
+*   **Simple Example:** Think of a normal conversation like a smooth, organized dance—one person speaks, then the other. Now imagine two people shouting entirely different things simultaneously. The sound waves crash into each other and become chaotic. These two complex math tools specifically look for that exact "chaos" to warn you that an argument or overlapping chatter is happening.
+
+---
+
+# The Artificial Intelligence
+Math alone is sometimes rigid. A file might pass the "math" test but still sound robotic or muffled to a human ear. That's why we added AI.
+
+### 1. Microsoft DNSMOS (The Robot Judge)
+*   **What it means:** An AI that grades the call exactly like a human would, from 1 to 5 stars.
+*   **Simple Example:** Microsoft paid thousands of real people to listen to phone calls and rate the quality from 1 (terrible) to 5 (crystal clear). They then trained an AI to copy how humans vote. When our system uses DNSMOS, it's basically asking this "robot judge" to listen to the call and give its human-like opinion.
+
+### 2. ONNX Runtime
+*   **What it means:** The engine block.
+*   **Simple Example:** If the Microsoft AI is the "driver" making decisions, ONNX Runtime is the "car engine" that allows the AI to actually run and function inside our application.
+
+### 3. DeepFilterNet (The Bonus)
+*   **What it means:** A magical vacuum cleaner for audio.
+*   **Simple Example:** If the Math and the Robot Judge decide your audio file is completely awful (for example, someone talking while a blender is running in the background), DeepFilterNet can step in, find the blender sound, and magically "erase" it while leaving the human voice perfectly intact.

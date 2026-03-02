@@ -133,7 +133,20 @@
         </div>
     </section>
 
-    <!-- History Dashboard -->
+    <!-- Transcript Panel -->
+    <section class="card animate" id="transcript-card"
+        style="margin-top: 1.5rem; animation-delay: 0.5s; display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h3 style="color: var(--gold-primary); text-transform: uppercase; letter-spacing: 1px; margin: 0;">
+                📝 Deepgram Transcript
+            </h3>
+            <div id="transcript-confidence-badge" class="badge" style="display: none;"></div>
+        </div>
+        <div id="transcript-body"
+            style="background: rgba(0,0,0,0.25); border-radius: 8px; padding: 1rem; max-height: 300px; overflow-y: auto; line-height: 1.8; font-size: 0.9rem; color: #ddd; white-space: pre-wrap; font-family: monospace;">
+        </div>
+    </section>
+
     <section class="card animate" id="history-card" style="margin-top: 1.5rem; animation-delay: 0.6s; display: none;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
             <h3 style="color: var(--gold-primary); text-transform: uppercase; letter-spacing: 1px; margin: 0;">
@@ -165,7 +178,7 @@
     </section>
     </div>
 
-    <script src="/static/js/main.js?v=4"></script>
+    <script src="/static/js/main.js?v=5"></script>
 </body>
 
 </html>

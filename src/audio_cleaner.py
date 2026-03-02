@@ -18,17 +18,27 @@ class AudioCleaner:
         Returns the output path.
         """
         if output_path is None:
-            base, ext = os.path.splitext(input_path)
-            output_path = f"{base}_cleaned{ext}"
+            base, _ = os.path.splitext(input_path)
+            # Default to .wav for lossless quality after processing
+            output_path = f"{base}_cleaned.wav"
 
         try:
             # Load
             audio, _ = load_audio(input_path, sr=self.df_state.sr())
             
-            # Enhance
-            enhanced = enhance(self.model, self.df_state, audio)
+            # Enhance with a 10dB attenuation limit to prevent "robotic" artifacts
+            # while still significantly reducing noise.
+            enhanced = enhance(self.model, self.df_state, audio, atten_lim_db=10)
             
-            # Save
+            # Post-Cleanup Vocal Normalization
+            # Ensure the vocal energy is consistently at a clear volume (-3dB peak)
+            max_val = torch.max(torch.abs(enhanced))
+            if max_val > 0:
+                # Target peak = 0.707 (-3dB)
+                target_peak = 0.707
+                enhanced = enhanced * (target_peak / max_val)
+            
+            # Save as WAV (PCM_16) for maximum fidelity
             save_audio(output_path, enhanced, self.df_state.sr())
             return output_path
         except Exception as e:

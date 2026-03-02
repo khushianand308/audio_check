@@ -73,7 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const score = data.reliability_score !== undefined ? `${data.reliability_score.toFixed(1)}%` : '--';
         const snrVal = metrics.snr !== undefined ? metrics.snr.toFixed(1) : '--';
         const mosVal = mos_scores.ovrl_mos ? mos_scores.ovrl_mos.toFixed(1) : '--';
-        const cleaned = data.cleaned_file_url ? '✅ Yes' : '—';
+        const cleaned = data.clean_audio_url ? '✅ Yes' : '—';
         const statusColor = data.is_reliable ? 'var(--accent-green)' : 'var(--accent-red)';
         const scoreColor = data.reliability_score >= 80 ? 'var(--accent-green)' : data.reliability_score >= 50 ? 'var(--gold-primary)' : 'var(--accent-red)';
 
@@ -164,7 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.is_reliable) {
                 summarySteps.push(`Based on this acoustic analysis, the audio file is robust enough to be sent directly to the Deepgram Transcription engine without major errors.`);
             } else {
-                if (data.cleaned_file_url) {
+                if (data.clean_audio_url) {
                     summarySteps.push(`Because this audio was degraded, it has been automatically cleaned by DeepFilterNet. The cleaned version is now available for playback below.`);
                 } else {
                     summarySteps.push(`Because this audio file is highly degraded, it will likely produce semantic hallucinations if transcribed.`);
@@ -201,16 +201,59 @@ document.addEventListener('DOMContentLoaded', () => {
         const cleanedContainer = document.getElementById('cleaned-audio-container');
 
         // Always populate the original raw audio
-        if (data.raw_file_url) {
-            rawPlayer.src = data.raw_file_url;
+        if (data.raw_audio_url) {
+            rawPlayer.src = data.raw_audio_url;
         }
 
         // Show cleaned comparison panel only if DeepFilterNet produced a result
-        if (data.cleaned_file_url) {
-            cleanedPlayer.src = data.cleaned_file_url;
+        if (data.clean_audio_url) {
+            cleanedPlayer.src = data.clean_audio_url;
             cleanedContainer.style.display = 'block';
         } else {
             cleanedContainer.style.display = 'none';
+        }
+        // 6. Transcript Panel
+        const transcriptCard = document.getElementById('transcript-card');
+        const transcriptBody = document.getElementById('transcript-body');
+        const confidenceBadge = document.getElementById('transcript-confidence-badge');
+
+        if (data.transcript) {
+            transcriptCard.style.display = 'block';
+
+            // Confidence badge
+            if (data.transcript_confidence !== null && data.transcript_confidence !== undefined) {
+                const pct = (data.transcript_confidence * 100).toFixed(1);
+                const source = data.transcribed_source === 'cleaned' ? ' (CLEANED SOURCE)' : ' (RAW SOURCE)';
+                confidenceBadge.textContent = `Confidence: ${pct}%${source}`;
+                confidenceBadge.style.display = 'inline-block';
+                confidenceBadge.style.padding = '4px 10px';
+                confidenceBadge.style.borderRadius = '20px';
+                confidenceBadge.style.fontSize = '0.75rem';
+                confidenceBadge.style.fontWeight = '700';
+
+                if (data.transcribed_source === 'cleaned') {
+                    confidenceBadge.style.background = 'rgba(46, 204, 113, 0.2)';
+                    confidenceBadge.style.color = 'var(--accent-green)';
+                    confidenceBadge.style.border = '1px solid var(--accent-green)';
+                } else {
+                    confidenceBadge.style.background = pct >= 80 ? 'rgba(0,200,100,0.15)' : 'rgba(255,150,0,0.15)';
+                    confidenceBadge.style.color = pct >= 80 ? 'var(--accent-green)' : 'var(--gold-primary)';
+                    confidenceBadge.style.border = `1px solid ${pct >= 80 ? 'var(--accent-green)' : 'var(--gold-primary)'}`;
+                }
+            }
+
+            // Format transcript with colored speaker labels
+            const lines = data.transcript.split('\n').filter(l => l.trim());
+            transcriptBody.innerHTML = lines.map(line => {
+                if (line.startsWith('Agent:')) {
+                    return `<div style="margin-bottom:0.5rem"><span style="color:var(--gold-primary);font-weight:700;">Agent:</span>${line.slice(6)}</div>`;
+                } else if (line.startsWith('Customer:')) {
+                    return `<div style="margin-bottom:0.5rem"><span style="color:var(--accent-green);font-weight:700;">Customer:</span>${line.slice(9)}</div>`;
+                }
+                return `<div style="margin-bottom:0.5rem">${line}</div>`;
+            }).join('');
+        } else {
+            transcriptCard.style.display = 'none';
         }
     }
 });

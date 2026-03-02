@@ -10,4 +10,4 @@ python-Levenshtein
 torch
 deepgram-sdk
 google-generativeai
-deepfilter-sdk
+deepfilter-sdk 

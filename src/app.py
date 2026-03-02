@@ -1,4 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+import torch
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
@@ -24,9 +25,14 @@ UPLOAD_DIR = os.path.join(BASE_DIR, "data", "uploads")
 PROCESSED_DIR = os.path.join(BASE_DIR, "data", "processed")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(PROCESSED_DIR, exist_ok=True)
-# Initialize analyzers (lazy load if possible or global)
+# Initialize analyzers (global singletons for speed)
 audio_analyzer = AudioNoiseAnalyzer(target_sr=16000)
 cleaner = AudioCleaner()
+pro_transcriber = TranscriberPro()
+
+@app.get("/api/health")
+async def health_check():
+    return {"status": "healthy", "gpu": torch.cuda.is_available()}
 
 @app.post("/api/process")
 async def process_audio(
@@ -36,7 +42,7 @@ async def process_audio(
     file_id = str(uuid.uuid4())
     ext = os.path.splitext(file.filename)[1] or ".mp3"
     raw_path = os.path.join(UPLOAD_DIR, f"{file_id}{ext}")
-    clean_path = os.path.join(PROCESSED_DIR, f"{file_id}_clean{ext}")
+    clean_path = os.path.join(PROCESSED_DIR, f"{file_id}_clean.wav")
     
     with open(raw_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
@@ -56,7 +62,7 @@ async def process_audio(
                 cleaner.clean_audio(raw_path, clean_path)
                 if os.path.exists(clean_path):
                     target_path_for_asr = clean_path
-                    cleaned_file_url = f"/data/processed/{file_id}_clean{ext}"
+                    cleaned_file_url = f"/data/processed/{file_id}_clean.wav"
                     print(f"DeepFilterNet cleanup complete. Clean file saved to: {clean_path}")
                 else:
                     print(f"DeepFilterNet ran but no output file found. Using raw audio.")
@@ -68,19 +74,52 @@ async def process_audio(
         # 3. Transcription Audit (Deepgram Pro)
         generated_transcript = None
         trans_res = None
+        transcript_confidence = None
+        transcribed_source = "raw"
         
-        # [STEP 1 FOCUS] Bypassing Heavy Models: Deepgram temporarily disabled for instant audio scoring tests
-        # pro_transcriber = TranscriberPro()
-        # if pro_transcriber.client:
-        #     print("Transcribing with Deepgram Pro...")
-        #     trans_res = pro_transcriber.transcribe(target_path_for_asr) 
-        #     if "text" in trans_res:
-        #         generated_transcript = trans_res["text"]
+        if pro_transcriber.client:
+            # === CLEAN-FIRST STRATEGY ===
+            # Primary: Use cleaned audio if available (better signal quality for ASR)
+            # Fallback: Use raw audio if cleaned fails or doesn't exist
+            
+            if os.path.exists(clean_path):
+                print(f"Transcribing with Deepgram Nova-2: {file.filename} (Primary: CLEANED audio)...")
+                trans_res = pro_transcriber.transcribe(clean_path)
+                transcribed_source = "cleaned"
+
+                if "text" in trans_res:
+                    generated_transcript = trans_res["text"]
+                    transcript_confidence = trans_res.get("confidence")
+
+                # Check if cleaned transcription failed (empty or very low confidence)
+                is_failed_clean = (not generated_transcript or len(generated_transcript.strip()) < 5 or
+                                   (transcript_confidence is not None and transcript_confidence < 0.2))
+
+                if is_failed_clean:
+                    print("Cleaned audio transcription failed or low-res. Falling back to RAW audio...")
+                    trans_res = pro_transcriber.transcribe(raw_path)
+                    transcribed_source = "raw"
+                    if "text" in trans_res:
+                        generated_transcript = trans_res["text"]
+                        transcript_confidence = trans_res.get("confidence")
+            else:
+                # No cleaned audio available — transcribe raw directly
+                print(f"Transcribing with Deepgram Nova-2: {file.filename} (RAW - no cleaned version)...")
+                trans_res = pro_transcriber.transcribe(raw_path)
+                transcribed_source = "raw"
+                if "text" in trans_res:
+                    generated_transcript = trans_res["text"]
+                    transcript_confidence = trans_res.get("confidence")
+
+            print(f"Transcription complete. Source: {transcribed_source}, Confidence: {transcript_confidence}")
+        else:
+            print("Deepgram API key not set. Skipping transcription.")
 
         # 4. Semantic Audit (Hallucination Guard)
         hallucination_flags = []
-        # if generated_transcript:
-        #     hallucination_flags = pro_transcriber.hallucination_guard(generated_transcript)
+        if generated_transcript:
+            hallucination_flags = pro_transcriber.hallucination_guard(generated_transcript)
+
 
         # 5. Comparison Logic
         comparison = None
@@ -115,12 +154,16 @@ async def process_audio(
             "status": "success",
             "audio_audit": audio_res,
             "transcript": generated_transcript,
+            "manual_transcript": manual_transcript,
+            "transcript_confidence": transcript_confidence,
+            "transcribed_source": transcribed_source,
             "comparison": comparison,
+            "hallucination_flags": hallucination_flags,
             "flags": reasons,
             "is_reliable": is_ready,  # True if Audio Math >= 0.75
             "reliability_score": readiness_score,  # Explicit Readiness Score 0-100%
-            "raw_file_url": raw_url,
-            "cleaned_file_url": cleaned_file_url
+            "raw_audio_url": raw_url,
+            "clean_audio_url": cleaned_file_url
         }
 
     except Exception as e:

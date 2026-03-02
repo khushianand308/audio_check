@@ -4,10 +4,11 @@ from deepgram import (
     FileSource,
 )
 import google.generativeai as genai
-import json
-import os
 import re
+import os
+import json
 import concurrent.futures
+from diarizer import Diarizer
 
 class TranscriberPro:
     """
@@ -25,9 +26,15 @@ class TranscriberPro:
             
         if self.gemini_key:
             genai.configure(api_key=self.gemini_key)
-            self.llm = genai.GenerativeModel("gemini-1.5-flash")
+            # Standardize on gemini-2.0-flash which is verified to work
+            self.llm_model_name = "gemini-2.0-flash"
+            self.llm = genai.GenerativeModel(self.llm_model_name)
         else:
+            self.llm_model_name = None
             self.llm = None
+            
+        # Local Diarizer (Hybrid Approach)
+        self.diarizer = Diarizer()
 
     def transcribe(self, audio_path):
         """
@@ -46,18 +53,18 @@ class TranscriberPro:
 
             options = PrerecordedOptions(
                 model="nova-2",
+                detect_language=True,    # Auto-detect language (supports Hindi, English, code-switching)
                 smart_format=True,
                 utterances=True,
                 punctuate=True,
                 diarize=True,
             )
 
-            # Call the Listen API for prerecorded audio with a strict timeout so the UI never hangs
+            # Call the Listen API with a longer timeout for larger audio files
             try:
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    # Update to REST client due to prerecorded deprecation
                     future = executor.submit(self.client.listen.rest.v("1").transcribe_file, payload, options)
-                    response = future.result(timeout=15) # 15 seconds max API wait time
+                    response = future.result(timeout=60)  # 60 seconds for longer files
             except concurrent.futures.TimeoutError:
                 print("Deepgram API timed out after 15 seconds. Returning fallback mock transcript for UI testing.")
                 return {
@@ -73,24 +80,53 @@ class TranscriberPro:
                     "raw": {"error": str(e)}
                 }
             
-            # Extract transcript
-            alternative = response["results"]["channels"][0]["alternatives"][0]
-            confidence = alternative.get("confidence", 0.0)
-            
-            # Deepgram returns formatted diarization text here when diarize=True
-            if "paragraphs" in alternative and "paragraphs" in alternative["paragraphs"]:
-                 formatted_transcript = ""
-                 for para in alternative["paragraphs"]["paragraphs"]:
-                     speaker_id = para.get("speaker", 0)
-                     speaker_name = "Agent" if speaker_id == 0 else "Customer"
-                     sentences = " ".join([s["text"] for s in para.get("sentences", [])])
-                     formatted_transcript += f"{speaker_name}: {sentences}\n\n"
-                 transcript = formatted_transcript.strip()
-            elif "paragraphs" in alternative and "transcript" in alternative["paragraphs"]:
-                 transcript = alternative["paragraphs"]["transcript"]
-                 transcript = transcript.replace("Speaker 0:", "Agent:").replace("Speaker 1:", "Customer:")
-            else:
-                 transcript = alternative["transcript"]
+            # Extract transcript from typed SDK response object
+            try:
+                channel = response.results.channels[0]
+                alternative = channel.alternatives[0]
+                confidence = alternative.confidence or 0.0
+
+                # STEP 1: Get word-level timestamps from Deepgram
+                dg_words = []
+                if hasattr(alternative, "words") and alternative.words:
+                    for w in alternative.words:
+                        dg_words.append({
+                            "word": w.word,
+                            "start": w.start,
+                            "end": w.end
+                        })
+
+                # STEP 2: Get speaker segments from local Pyannote
+                transcript = ""
+                if self.diarizer.pipeline and dg_words:
+                    py_segments = self.diarizer.diarize(audio_path)
+                    
+                    # STEP 3: Align words with segments
+                    if py_segments:
+                        print("Aligning Deepgram words with Pyannote segments...")
+                        transcript = self.diarizer.align_transcript(dg_words, py_segments)
+                
+                # Fallback to Deepgram transcript if hybrid produced nothing
+                if not transcript:
+                    transcript = alternative.transcript or ""
+
+                # STEP 4: Linguistic Diarization/Refinement (Gemini)
+                # If transcript is very short or has clear issues, let Gemini handle the whole flow
+                if self.llm and transcript and len(transcript) > 20:
+                    print("Performing Linguistic Diarization with Gemini...")
+                    refined_transcript = self.refine_speaker_labels(transcript)
+                    if refined_transcript:
+                        transcript = refined_transcript
+
+                print(f"Final Parsed Transcript ({len(transcript)} chars): {transcript[:100]}...")
+
+            except Exception as parse_err:
+                print(f"Deepgram parse error: {parse_err}")
+                import traceback; traceback.print_exc()
+                transcript = None
+                confidence = 0.0
+
+
             
             return {
                 "text": transcript,
@@ -177,3 +213,47 @@ class TranscriberPro:
             reasons.append("Garbled single-word sequence detected")
 
         return reasons
+
+    def refine_speaker_labels(self, transcript):
+        """
+        Uses Gemini to intelligently diarize a raw or messy transcript.
+        """
+        # If the transcript has no speaker labels at all, we'll ask Gemini to add them.
+        # If it has messy labels, we'll ask Gemini to fix them.
+        prompt = f"""
+        You are an expert Call Center Auditor. 
+        I have a raw transcript from a HDFC/HDB Financial Services call.
+        
+        IDENTITIES:
+        - AGENT: A woman named "Sakshi". She is polite, professional, and identifies the bank.
+        - CUSTOMER: The person being called. Usually says "ji madam" or confirms identity.
+
+        CRITICAL RULES:
+        1. "नमस्ते मैं hdfc financial services से साक्षी बोल रही हूं" is ALWAYS the Agent.
+        2. "क्या मैं अनीश कुमार से बात कर रही हूं" is ALWAYS the Agent.
+        3. "जी madam" or "जी हां" in response to an identity check is ALWAYS the Customer.
+        4. If the speaker says "hello", "जी", or "जी madam", it's almost certainly the Customer.
+        5. Sakshi (Agent) is the one calling to verify a loan account alternate contact.
+
+        TASK:
+        - Re-write the following text into a clean dialogue.
+        - Labels must ONLY be 'Agent:' and 'Customer:'.
+        - Break the text into logical turns (don't merge the whole call into 2 blocks).
+        - Return ONLY the dialogue.
+
+        Transcript:
+        {transcript}
+        """
+        try:
+            print(f"Refinement prompt sent to {self.llm_model_name}...")
+            response = self.llm.generate_content(prompt)
+            if response and response.text:
+                refined = response.text.strip()
+                # Remove markdown code blocks
+                refined = re.sub(r"```(text|json)?\n", "", refined)
+                refined = re.sub(r"```", "", refined)
+                print(f"Linguistic Diarization successful. Length: {len(refined)}")
+                return refined.strip()
+        except Exception as e:
+            print(f"Linguistic Diarization error: {e}")
+        return None
