@@ -5,6 +5,28 @@ Automatically scores, cleans, transcribes, and diarizes phone call recordings us
 
 ---
 
+## ⚡ Quick Start
+
+```bash
+# Start
+cd /home/ubuntu/bg_noise_check
+source .venv/bin/activate
+export PYTHONPATH=$PYTHONPATH:$(pwd)/src
+python3 -m uvicorn src.app:app --host 0.0.0.0 --port 8766
+```
+
+```bash
+# Stop
+pkill -f uvicorn
+
+# Force stop (if above doesn't work)
+pkill -f uvicorn -9
+```
+
+Open UI at: **http://localhost:8766**
+
+---
+
 ## What It Does
 
 Upload any `.mp3` or `.wav` call recording. The system will:
