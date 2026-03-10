@@ -62,8 +62,8 @@ class AudioCleaner:
             if len(audio.shape) == 1:
                 audio = audio.unsqueeze(0)
             
-            # 2. Pre-Processing: High-Pass Filter (Strip rumble < 100Hz)
-            audio = self.apply_high_pass_filter(audio, target_sr, cutoff=100)
+            # 2. Pre-Processing: High-Pass Filter (Strip rumble < 80Hz)
+            audio = self.apply_high_pass_filter(audio, target_sr, cutoff=80)
             
             # 3. Neural Enhancement: Variable Attenuation
             # Use attenuation_db parameter: 20dB for ASR safety, 60dB for human purity.

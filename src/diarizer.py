@@ -80,7 +80,10 @@ class Diarizer:
         agent_speaker_id = None
         
         # Keywords suggesting an Agent introduction in Hindi/English
-        agent_keywords = ["बोल", "रही", "हूं", "hdfc", "hdb", "financial", "services", "sakshi", "नमस्ते"]
+        agent_keywords = [
+            "बोल", "रही", "हूं", "नमस्ते", "कॉल", "सेवा", "bank", "finance",
+            "hdfc", "hdb", "financial", "services", "sakshi", "neha", "नेहा", "साक्षी"
+        ]
         
         speaker_scores = {}
         for word_info in dg_words:

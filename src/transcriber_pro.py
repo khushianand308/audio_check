@@ -227,21 +227,15 @@ class TranscriberPro:
         I have a raw transcript from a HDFC/HDB Financial Services call.
         
         IDENTITIES:
-        - AGENT: A woman named "Sakshi". She is polite, professional, and identifies the bank.
-        - CUSTOMER: The person being called. Usually says "ji madam" or confirms identity.
+        - AGENT: The person representing the bank or finance company. Usually starts with a greeting, identifies themselves/company, and asks to speak with a specific person.
+        - CUSTOMER: The person receiving the call. Often says "Hello", "Ji", or confirms their identity.
 
         CRITICAL RULES:
-        1. "नमस्ते मैं hdfc financial services से साक्षी बोल रही हूं" is ALWAYS the Agent.
-        2. "क्या मैं अनीश कुमार से बात कर रही हूं" is ALWAYS the Agent.
-        3. "जी madam" or "जी हां" in response to an identity check is ALWAYS the Customer.
-        4. If the speaker says "hello", "जी", or "जी madam", it's almost certainly the Customer.
-        5. Sakshi (Agent) is the one calling to verify a loan account alternate contact.
-
-        TASK:
-        - Re-write the following text into a clean dialogue.
-        - Labels must ONLY be 'Agent:' and 'Customer:'.
-        - Break the text into logical turns (don't merge the whole call into 2 blocks).
-        - Return ONLY the dialogue.
+        1. The person who opens the call with a professional greeting or bank identification is the AGENT.
+        2. The person who responds with "Hello", "Ji madam", or confirms their name is the CUSTOMER.
+        3. Maintain the natural flow of the conversation. Do not strip "Hello" or greetings at the start.
+        4. Re-write the following text into a clean dialogue with 'Agent:' and 'Customer:' labels.
+        5. Return ONLY the dialogue.
 
         Transcript:
         {transcript}
