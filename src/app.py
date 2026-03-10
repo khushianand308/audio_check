@@ -50,7 +50,10 @@ async def process_audio(
     file_id = str(uuid.uuid4())
     ext = os.path.splitext(file.filename)[1] or ".mp3"
     raw_path = os.path.join(UPLOAD_DIR, f"{file_id}{ext}")
-    clean_path = os.path.join(PROCESSED_DIR, f"{file_id}_clean.wav")
+    
+    # Dual Cleaning Paths
+    clean_path_asr = os.path.join(PROCESSED_DIR, f"{file_id}_asr_20db.wav")
+    clean_path_listener = os.path.join(PROCESSED_DIR, f"{file_id}_listener_60db.wav")
     
     with open(raw_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
@@ -60,22 +63,25 @@ async def process_audio(
         audio_res = audio_analyzer.analyze(raw_path)
         is_noisy = audio_res.get("is_noisy", False)
         
-        # 2. Production Cleanup (Conditional) - Auto-clean noisy audio with DeepFilterNet
-        target_path_for_asr = raw_path
+        # 2. Dual-Level Production Cleanup (Conditional)
         cleaned_file_url = None
         
         if is_noisy:
-            print(f"Audio flagged as NOISY. Applying DeepFilterNet to: {file.filename}...")
+            print(f"Audio flagged as NOISY. Applying Dual-Level DeepFilterNet to: {file.filename}...")
             try:
-                cleaner.clean_audio(raw_path, clean_path)
-                if os.path.exists(clean_path):
-                    target_path_for_asr = clean_path
-                    cleaned_file_url = f"/data/processed/{file_id}_clean.wav"
-                    print(f"DeepFilterNet cleanup complete. Clean file saved to: {clean_path}")
+                # Version 1: Optimized for ASR (20dB - preserves speech cadence)
+                cleaner.clean_audio(raw_path, clean_path_asr, attenuation_db=20)
+                
+                # Version 2: Optimized for Human Ears (60dB - absolute silence)
+                cleaner.clean_audio(raw_path, clean_path_listener, attenuation_db=60)
+                
+                if os.path.exists(clean_path_listener):
+                    cleaned_file_url = f"/data/processed/{file_id}_listener_60db.wav"
+                    print(f"Dual-Level cleanup complete.")
                 else:
-                    print(f"DeepFilterNet ran but no output file found. Using raw audio.")
+                    print(f"DeepFilterNet ran but listener file not found.")
             except Exception as clean_err:
-                print(f"DeepFilterNet failed: {clean_err}. Using raw audio.")
+                print(f"DeepFilterNet dual-cleaning failed: {clean_err}.")
         else:
             print(f"Audio is CLEAN. Bypassing DeepFilterNet for: {file.filename}.")
         
@@ -87,12 +93,12 @@ async def process_audio(
         
         if pro_transcriber.client:
             # === CLEAN-FIRST STRATEGY ===
-            # Primary: Use cleaned audio if available (better signal quality for ASR)
-            # Fallback: Use raw audio if cleaned fails or doesn't exist
+            # Primary: Use ASR-optimized cleaned audio (20dB)
+            # Fallback: Use raw audio if cleaned fails
             
-            if os.path.exists(clean_path):
-                print(f"Transcribing with Deepgram Nova-2: {file.filename} (Primary: CLEANED audio)...")
-                trans_res = pro_transcriber.transcribe(clean_path)
+            if os.path.exists(clean_path_asr):
+                print(f"Transcribing with Deepgram Nova-2: {file.filename} (Primary: ASR-Optimized CLEANED audio)...")
+                trans_res = pro_transcriber.transcribe(clean_path_asr)
                 transcribed_source = "cleaned"
 
                 if "text" in trans_res:

@@ -25,10 +25,11 @@ class AudioCleaner:
         filtered_np = scipy.signal.filtfilt(b, a, audio_np)
         return torch.from_numpy(filtered_np.copy().astype(np.float32)).to(audio.device)
 
-    def clean_audio(self, input_path, output_path=None):
+    def clean_audio(self, input_path, output_path=None, attenuation_db=50):
         """
         Enhances the audio and saves it to a new file.
         Returns the output path.
+        attenuation_db: The noise suppression limit in dB (e.g., 20 for ASR, 60 for listening).
         """
         if output_path is None:
             base, _ = os.path.splitext(input_path)
@@ -64,9 +65,9 @@ class AudioCleaner:
             # 2. Pre-Processing: High-Pass Filter (Strip rumble < 100Hz)
             audio = self.apply_high_pass_filter(audio, target_sr, cutoff=100)
             
-            # 3. Neural Enhancement: Balanced Attenuation
-            # 50dB is the "sweet spot": strong enough to clean but safe enough for ASR.
-            enhanced = enhance(self.model, self.df_state, audio, atten_lim_db=50)
+            # 3. Neural Enhancement: Variable Attenuation
+            # Use attenuation_db parameter: 20dB for ASR safety, 60dB for human purity.
+            enhanced = enhance(self.model, self.df_state, audio, atten_lim_db=attenuation_db)
             
             # 4. Post-Processing: Normalization
             max_val = torch.max(torch.abs(enhanced))
