@@ -5,22 +5,41 @@ Automatically scores, cleans, transcribes, and diarizes phone call recordings us
 
 ---
 
-## ⚡ Quick Start
+## ⚡ Service Management
 
+### 1. Start (Standard)
+Runs in your current terminal. Good for debugging.
 ```bash
-# Start
 cd /home/ubuntu/bg_noise_check
 source .venv/bin/activate
 export PYTHONPATH=$PYTHONPATH:$(pwd)/src
 python3 -m uvicorn src.app:app --host 0.0.0.0 --port 8766
 ```
 
+### 2. Start (Forever / Background)
+Runs in the background and keeps running even after you close the terminal.
 ```bash
-# Stop
-pkill -f uvicorn
+cd /home/ubuntu/bg_noise_check
+source .venv/bin/activate
+export PYTHONPATH=$PYTHONPATH:$(pwd)/src
+nohup python3 -m uvicorn src.app:app --host 0.0.0.0 --port 8766 > server.log 2>&1 &
+```
 
-# Force stop (if above doesn't work)
-pkill -f uvicorn -9
+### 3. Check Status
+```bash
+# Check if process is alive
+pgrep -fl uvicorn
+
+# Check health endpoint
+curl http://localhost:8766/api/health
+
+# View live logs
+tail -f server.log
+```
+
+### 4. Stop
+```bash
+pkill -f uvicorn
 ```
 
 Open UI at: **http://localhost:8766**
