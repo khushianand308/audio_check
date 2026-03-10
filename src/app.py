@@ -1,6 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 import torch
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 import shutil
@@ -16,6 +16,14 @@ from fuzzywuzzy import fuzz
 load_dotenv()
 
 app = FastAPI(title="AudioSense Pro API")
+
+@app.middleware("http")
+async def add_no_cache_header(request, call_next):
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 # Base dir = project root (one level up from src/)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -174,18 +182,23 @@ async def process_audio(
 
 @app.get("/", response_class=HTMLResponse)
 async def read_index():
-    if os.path.exists("static/index.html"):
-        with open("static/index.html", "r") as f:
-            return f.read()
-    elif os.path.exists("index.html"):
-        with open("index.html", "r") as f:
-            return f.read()
-    return "Index not found. Please create index.html"
+    index_path = os.path.join(BASE_DIR, "static", "index.html")
+    if os.path.exists(index_path):
+        with open(index_path, "r") as f:
+            return HTMLResponse(content=f.read())
+    
+    # Fallback to index.html in root if static folder version is missing
+    root_index = os.path.join(BASE_DIR, "index.html")
+    if os.path.exists(root_index):
+        with open(root_index, "r") as f:
+             return HTMLResponse(content=f.read())
+    
+    return HTMLResponse(content="Index not found. Please create static/index.html", status_code=404)
 
 # Serve static files and data securely
-app.mount("/data/processed", StaticFiles(directory="data/processed"), name="processed")
-app.mount("/data/uploads", StaticFiles(directory="data/uploads"), name="uploads")
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/data/processed", StaticFiles(directory=os.path.join(BASE_DIR, "data", "processed")), name="processed")
+app.mount("/data/uploads", StaticFiles(directory=os.path.join(BASE_DIR, "data", "uploads")), name="uploads")
+app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 
 if __name__ == "__main__":
-    uvicorn.run("src.app:app", host="0.0.0.0", port=8080, reload=False)
+    uvicorn.run("src.app:app", host="0.0.0.0", port=8766, reload=False)
