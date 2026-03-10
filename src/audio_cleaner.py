@@ -61,13 +61,12 @@ class AudioCleaner:
             if len(audio.shape) == 1:
                 audio = audio.unsqueeze(0)
             
-            # 2. Pre-Processing: High-Pass Filter (Strip rumble < 80Hz)
-            audio = self.apply_high_pass_filter(audio, target_sr, cutoff=80)
+            # 2. Pre-Processing: High-Pass Filter (Strip rumble < 100Hz)
+            audio = self.apply_high_pass_filter(audio, target_sr, cutoff=100)
             
-            # 3. Neural Enhancement: Natural Attenuation
-            # Reduced from 100dB to 20dB. 
-            # 100dB was too aggressive and "deleted" faint speech.
-            enhanced = enhance(self.model, self.df_state, audio, atten_lim_db=20)
+            # 3. Neural Enhancement: Balanced Attenuation
+            # 50dB is the "sweet spot": strong enough to clean but safe enough for ASR.
+            enhanced = enhance(self.model, self.df_state, audio, atten_lim_db=50)
             
             # 4. Post-Processing: Normalization
             max_val = torch.max(torch.abs(enhanced))
