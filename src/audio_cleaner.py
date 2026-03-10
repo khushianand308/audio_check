@@ -35,26 +35,42 @@ class AudioCleaner:
             output_path = f"{base}_cleaned.wav"
 
         try:
-            # 1. Load Data
-            audio, _ = load_audio(input_path, sr=self.df_state.sr())
+            # 1. Robust Load Data (Manual handle for samplerate and mono)
+            import soundfile as sf
+            audio_np, orig_sr = sf.read(input_path)
+            
+            # Convert to mono if stereo
+            if len(audio_np.shape) > 1:
+                audio_np = np.mean(audio_np, axis=1)
+            
+            # Resample to DeepFilterNet target SR (usually 48kHz)
+            target_sr = self.df_state.sr()
+            if orig_sr != target_sr:
+                num_samples = int(len(audio_np) * target_sr / orig_sr)
+                audio_np = scipy.signal.resample(audio_np, num_samples)
+            
+            # Convert to torch tensor and ensure float32 (keep on CPU for feature extraction)
+            audio = torch.from_numpy(audio_np.astype(np.float32))
+            if len(audio.shape) == 1:
+                audio = audio.unsqueeze(0) # Add batch/channel dim for DF
             
             # 2. Pre-Processing: High-Pass Filter (Strip rumble < 100Hz)
-            audio = self.apply_high_pass_filter(audio, self.df_state.sr(), cutoff=100)
+            audio = self.apply_high_pass_filter(audio, target_sr, cutoff=100)
             
             # 3. Neural Enhancement: Aggressive 100dB Attenuation
-            # Bumped from 10dB to 100dB to completely zero out stubborn noise.
             enhanced = enhance(self.model, self.df_state, audio, atten_lim_db=100)
             
             # 4. Post-Processing: Surgical Normalization
-            # Target peak = -1dB (0.89) for maximum punch without clipping
             max_val = torch.max(torch.abs(enhanced))
             if max_val > 1e-6:
                 target_peak = 0.89 
                 enhanced = enhanced * (target_peak / max_val)
             
             # 5. Save (Lossless WAV)
-            save_audio(output_path, enhanced, self.df_state.sr())
+            save_audio(output_path, enhanced.cpu(), target_sr)
             return output_path
         except Exception as e:
             print(f"DeepFilterNet Cleanup Error: {e}")
+            import traceback
+            traceback.print_exc()
             return input_path
