@@ -111,12 +111,14 @@ class TranscriberPro:
                     transcript = alternative.transcript or ""
 
                 # STEP 4: Linguistic Diarization/Refinement (Gemini)
-                # If transcript is very short or has clear issues, let Gemini handle the whole flow
-                if self.llm and transcript and len(transcript) > 20:
-                    print("Performing Linguistic Diarization with Gemini...")
+                # If transcript is very short (< 70 chars), refinement often deletes everything or hallucinates
+                if self.llm and transcript and len(transcript) > 70:
+                    print(f"Refining transcript of length {len(transcript)} with Gemini...")
                     refined_transcript = self.refine_speaker_labels(transcript)
                     if refined_transcript:
                         transcript = refined_transcript
+                elif transcript:
+                    print(f"Transcript too short ({len(transcript)} chars) for reliable LLM refinement. Skipping.")
 
                 print(f"Final Parsed Transcript ({len(transcript)} chars): {transcript[:100]}...")
 

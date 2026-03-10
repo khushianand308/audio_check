@@ -35,38 +35,47 @@ class AudioCleaner:
             output_path = f"{base}_cleaned.wav"
 
         try:
-            # 1. Robust Load Data (Manual handle for samplerate and mono)
+            # 1. Robust Load Data
             import soundfile as sf
             audio_np, orig_sr = sf.read(input_path)
             
-            # Convert to mono if stereo
+            # Convert to mono
             if len(audio_np.shape) > 1:
                 audio_np = np.mean(audio_np, axis=1)
             
-            # Resample to DeepFilterNet target SR (usually 48kHz)
+            # INPUT NORMALIZATION: Ensure speech isn't too faint for the model
+            rms = np.sqrt(np.mean(audio_np**2))
+            if rms < 0.01 and rms > 1e-6:
+                # Target an RMS of 0.05 for processing
+                audio_np = audio_np * (0.05 / rms)
+
+            # BETTER RESAMPLING: resample_poly is better for upsampling telco audio (8k -> 48k)
             target_sr = self.df_state.sr()
             if orig_sr != target_sr:
-                num_samples = int(len(audio_np) * target_sr / orig_sr)
-                audio_np = scipy.signal.resample(audio_np, num_samples)
+                # Use resample_poly which uses a polyphase filter (higher quality than Fourier)
+                import scipy.signal
+                audio_np = scipy.signal.resample_poly(audio_np, target_sr, orig_sr)
             
-            # Convert to torch tensor and ensure float32 (keep on CPU for feature extraction)
+            # Convert to torch tensor
             audio = torch.from_numpy(audio_np.astype(np.float32))
             if len(audio.shape) == 1:
-                audio = audio.unsqueeze(0) # Add batch/channel dim for DF
+                audio = audio.unsqueeze(0)
             
-            # 2. Pre-Processing: High-Pass Filter (Strip rumble < 100Hz)
-            audio = self.apply_high_pass_filter(audio, target_sr, cutoff=100)
+            # 2. Pre-Processing: High-Pass Filter (Strip rumble < 80Hz)
+            audio = self.apply_high_pass_filter(audio, target_sr, cutoff=80)
             
-            # 3. Neural Enhancement: Aggressive 100dB Attenuation
-            enhanced = enhance(self.model, self.df_state, audio, atten_lim_db=100)
+            # 3. Neural Enhancement: Natural Attenuation
+            # Reduced from 100dB to 20dB. 
+            # 100dB was too aggressive and "deleted" faint speech.
+            enhanced = enhance(self.model, self.df_state, audio, atten_lim_db=20)
             
-            # 4. Post-Processing: Surgical Normalization
+            # 4. Post-Processing: Normalization
             max_val = torch.max(torch.abs(enhanced))
             if max_val > 1e-6:
-                target_peak = 0.89 
+                target_peak = 0.90 
                 enhanced = enhanced * (target_peak / max_val)
             
-            # 5. Save (Lossless WAV)
+            # 5. Save
             save_audio(output_path, enhanced.cpu(), target_sr)
             return output_path
         except Exception as e:
